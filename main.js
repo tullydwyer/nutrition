@@ -642,6 +642,79 @@ function fun() {
         });
 }
 
+function getNutrientContribution(foodName, amount) {
+    const contributions = {};
+    for (const nutrient in constraints) {
+        if (nutrient === 'grams') continue;
+        if (data[foodName][nutrient]) {
+            contributions[nutrient] = data[foodName][nutrient] * amount;
+        }
+    }
+    return contributions;
+}
+
+function getPercentageOfConstraint(value, nutrient) {
+    if (!constraints[nutrient]) return 0;
+    if (constraints[nutrient].min) {
+        return (value / constraints[nutrient].min) * 100;
+    }
+    if (constraints[nutrient].max) {
+        return (value / constraints[nutrient].max) * 100;
+    }
+    return 0;
+}
+
+function toggleFoodDetails(foodName) {
+    const foodItem = document.querySelector(`[data-food-name="${foodName}"]`);
+    const wasExpanded = foodItem.classList.contains('expanded');
+    
+    // Close all other expanded items
+    document.querySelectorAll('.food-item.expanded').forEach(item => {
+        if (item !== foodItem) {
+            item.classList.remove('expanded');
+        }
+    });
+    
+    // Toggle current item
+    foodItem.classList.toggle('expanded');
+    
+    // If we're expanding this item, calculate and show nutritional details
+    if (!wasExpanded) {
+        const detailsContainer = foodItem.querySelector('.food-item-details');
+        if (!detailsContainer) return;
+        
+        // Calculate nutritional contribution for 100g
+        const contributions = getNutrientContribution(foodName, 100);
+        let detailsHTML = '<div class="nutrient-contributions">';
+        
+        // Show top 5 most significant contributions
+        const sortedNutrients = Object.entries(contributions)
+            .sort(([,a], [,b]) => getPercentageOfConstraint(b, a) - getPercentageOfConstraint(a, b))
+            .slice(0, 5);
+        
+        for (const [nutrient, value] of sortedNutrients) {
+            const percentage = getPercentageOfConstraint(value, nutrient);
+            const formattedValue = Math.round(value * 100) / 100;
+            const unit = nutrient.match(/\((.*?)\)/)?.[1] || '';
+            
+            detailsHTML += `
+                <div class="nutrient-item">
+                    <div class="nutrient-item-header">
+                        <span>${nutrient.replace(/\s*\([^)]*\)/, '')}</span>
+                        <span>${formattedValue} ${unit}</span>
+                    </div>
+                    <div class="nutrient-bar">
+                        <div class="nutrient-bar-fill" style="width: ${Math.min(100, percentage)}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        detailsHTML += '</div>';
+        detailsContainer.innerHTML = detailsHTML;
+    }
+}
+
 function displayFoodList() {
     if (!isDataLoaded) {
         document.getElementById('checkbox-filter').innerHTML = "<p>Loading data...</p>";
@@ -663,17 +736,22 @@ function displayFoodList() {
     for (let foodName of sortedFoods) {
         const isEnabled = enabledFoods.has(foodName);
         html += `
-            <div class='food-item ${!isEnabled ? 'disabled' : ''}' data-food-name="${foodName}">
-                <div class="food-item-info">
-                    <h3>${foodName}</h3>
-                    <p style='color: var(--text-secondary);'>
-                        ${data[foodName]["Public Food Key"] || 'No ID'}
-                    </p>
+            <div class='food-item ${!isEnabled ? 'disabled' : ''}' data-food-name="${foodName}" onclick="toggleFoodDetails('${foodName.replace(/'/g, "\\'")}')">
+                <div class="food-item-header">
+                    <div class="food-item-info">
+                        <h3>${foodName}</h3>
+                        <p style='color: var(--text-secondary);'>
+                            ${data[foodName]["Public Food Key"] || 'No ID'}
+                        </p>
+                    </div>
+                    <label class="toggle-switch" onclick="event.stopPropagation()">
+                        <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleFood('${foodName.replace(/'/g, "\\'")}')">
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
-                <label class="toggle-switch">
-                    <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleFood('${foodName.replace(/'/g, "\\'")}')">
-                    <span class="toggle-slider"></span>
-                </label>
+                <div class="food-item-details">
+                    <!-- Nutritional details will be populated when expanded -->
+                </div>
             </div>
         `;
     }
