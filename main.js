@@ -650,7 +650,17 @@ function displayFoodList() {
     
     let html = '<div class="food-list">';
     
-    for (let foodName in data) {
+    // Sort food items: enabled foods first, then disabled foods
+    const sortedFoods = Object.keys(data).sort((a, b) => {
+        const aEnabled = enabledFoods.has(a);
+        const bEnabled = enabledFoods.has(b);
+        if (aEnabled === bEnabled) {
+            return a.localeCompare(b); // If both enabled or both disabled, sort alphabetically
+        }
+        return aEnabled ? -1 : 1; // Enabled foods come first
+    });
+    
+    for (let foodName of sortedFoods) {
         const isEnabled = enabledFoods.has(foodName);
         html += `
             <div class='food-item ${!isEnabled ? 'disabled' : ''}' data-food-name="${foodName}">
