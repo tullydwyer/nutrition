@@ -66,10 +66,15 @@ const constraints = {
     }
 }
 
+// Constants
+const EPSILON = 0.0001;  // Small tolerance for floating point comparison (0.01%)
+
 // Initialize data as an empty object
 var data = {};
 var csvParser;
 var isDataLoaded = false;
+
+let nutritionChart = null;
 
 class ExcelToJSON {
     constructor() {
@@ -219,13 +224,246 @@ class ExcelToJSON {
     }
 }
 
+function updateStats(results) {
+    const totalFoods = Object.keys(results).filter(key => 
+        key !== 'feasible' && 
+        key !== 'result' && 
+        key !== 'bounded' && 
+        key !== 'isIntegral' && 
+        results[key] > 0
+    ).length;
+
+    const totalWeight = Math.round(results.result);
+    
+    // Calculate nutrients met
+    let nutrientsMet = 0;
+    let totalNutrients = 0;
+    
+    for (const nutrient in constraints) {
+        if (nutrient === 'grams') continue;
+        totalNutrients++;
+        
+        let totalAmount = 0;
+        for (const food in results) {
+            if (food !== 'feasible' && food !== 'result' && food !== 'bounded' && food !== 'isIntegral' && results[food] > 0) {
+                totalAmount += (data[food][nutrient] || 0) * results[food];
+            }
+        }
+        
+        console.log(`${nutrient}: Amount = ${totalAmount}`);
+        if (constraints[nutrient].min && constraints[nutrient].max) {
+            // For nutrients with both min and max, must be within range
+            if (totalAmount >= constraints[nutrient].min - EPSILON && totalAmount <= constraints[nutrient].max + EPSILON) {
+                nutrientsMet++;
+                console.log(`  ✓ Met (within range ${constraints[nutrient].min} - ${constraints[nutrient].max})`);
+            } else {
+                console.log(`  ✗ Not met (outside range ${constraints[nutrient].min} - ${constraints[nutrient].max})`);
+            }
+        } else if (constraints[nutrient].min && totalAmount >= constraints[nutrient].min - EPSILON) {
+            nutrientsMet++;
+            console.log(`  ✓ Met (>= min ${constraints[nutrient].min})`);
+        } else if (constraints[nutrient].max && totalAmount <= constraints[nutrient].max + EPSILON) {
+            nutrientsMet++;
+            console.log(`  ✓ Met (<= max ${constraints[nutrient].max})`);
+        } else {
+            console.log(`  ✗ Not met`);
+        }
+    }
+
+    document.getElementById('total-foods').textContent = totalFoods;
+    document.getElementById('total-weight').textContent = `${totalWeight}g`;
+    document.getElementById('nutrients-met').textContent = `${nutrientsMet}/${totalNutrients}`;
+}
+
+function updateNutritionChart(results) {
+    const nutrients = {};
+    const requirements = {};
+    
+    // Calculate total nutrients
+    for (const nutrient in constraints) {
+        if (nutrient === 'grams') continue;
+        
+        nutrients[nutrient] = 0;
+        requirements[nutrient] = constraints[nutrient].min || constraints[nutrient].max || 0;
+        
+        for (const food in results) {
+            if (food !== 'feasible' && food !== 'result' && food !== 'bounded' && food !== 'isIntegral' && results[food] > 0) {
+                nutrients[nutrient] += (data[food][nutrient] || 0) * results[food];
+            }
+        }
+    }
+
+    // Create table HTML
+    let tableHTML = `
+        <div class="nutrition-table-container">
+            <table class="nutrition-table">
+                <thead>
+                    <tr>
+                        <th>Nutrient</th>
+                        <th>Current</th>
+                        <th>Required Range</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    for (const nutrient in nutrients) {
+        const currentAmount = Math.round(nutrients[nutrient] * 100) / 100;
+        let status = '';
+        let statusClass = '';
+        let percentage = 0;
+
+        // Extract unit from nutrient name
+        const unitMatch = nutrient.match(/\((.*?)\)/g);
+        let unit = '';
+        if (unitMatch) {
+            // Take the last unit in parentheses
+            const lastUnit = unitMatch[unitMatch.length - 1];
+            unit = lastUnit.replace(/[()]/g, '').trim();
+        }
+
+        // Build the requirements text
+        let requirementsText = '';
+        if (constraints[nutrient].min && constraints[nutrient].max) {
+            requirementsText = `${constraints[nutrient].min} - ${constraints[nutrient].max} ${unit}`;
+            // Check both min and max
+            if (currentAmount >= constraints[nutrient].min - EPSILON && currentAmount <= constraints[nutrient].max + EPSILON) {
+                status = '✓ Within range';
+                statusClass = 'success';
+                percentage = 100;
+            } else if (currentAmount < constraints[nutrient].min - EPSILON) {
+                percentage = (currentAmount / constraints[nutrient].min) * 100;
+                status = `${Math.round(percentage)}% of min`;
+                statusClass = percentage > 70 ? 'warning' : 'error';
+            } else {
+                percentage = (currentAmount / constraints[nutrient].max) * 100;
+                status = `${Math.round(percentage)}% of max`;
+                statusClass = 'error';
+            }
+        } else if (constraints[nutrient].min) {
+            requirementsText = `≥ ${constraints[nutrient].min} ${unit}`;
+            percentage = (currentAmount / constraints[nutrient].min) * 100;
+            if (currentAmount >= constraints[nutrient].min - EPSILON) {
+                status = '✓ Met';
+                statusClass = 'success';
+            } else {
+                status = `${Math.round(percentage)}% of min`;
+                statusClass = percentage > 70 ? 'warning' : 'error';
+            }
+        } else if (constraints[nutrient].max) {
+            requirementsText = `≤ ${constraints[nutrient].max} ${unit}`;
+            percentage = (currentAmount / constraints[nutrient].max) * 100;
+            if (currentAmount <= constraints[nutrient].max + EPSILON) {
+                status = '✓ Within limit';
+                statusClass = 'success';
+            } else {
+                status = `${Math.round(percentage)}% of max`;
+                statusClass = 'error';
+            }
+        }
+
+        // Clean up nutrient name and ensure unit is shown consistently
+        const cleanNutrientName = nutrient.replace(/\s*\([^)]*\)/, '');
+        
+        tableHTML += `
+            <tr>
+                <td>${cleanNutrientName}</td>
+                <td class="numeric">${currentAmount} ${unit}</td>
+                <td class="numeric">${requirementsText}</td>
+                <td class="status ${statusClass}">
+                    <div class="status-bar" style="width: ${Math.min(100, percentage)}%"></div>
+                    <span>${status}</span>
+                </td>
+            </tr>
+        `;
+    }
+
+    tableHTML += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    // Add table styles
+    if (!document.getElementById('nutrition-table-styles')) {
+        const styleSheet = document.createElement('style');
+        styleSheet.id = 'nutrition-table-styles';
+        styleSheet.textContent = `
+            .nutrition-table-container {
+                overflow-x: auto;
+                margin-top: 1rem;
+            }
+            .nutrition-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 0.875rem;
+            }
+            .nutrition-table th,
+            .nutrition-table td {
+                padding: 0.5rem;
+                text-align: left;
+                border-bottom: 1px solid var(--border-color);
+                white-space: nowrap;
+            }
+            .nutrition-table th {
+                background-color: var(--background-color);
+                font-weight: 500;
+                color: var(--text-secondary);
+            }
+            .nutrition-table .numeric {
+                font-family: monospace;
+                text-align: right;
+            }
+            .nutrition-table .status {
+                position: relative;
+                width: 150px;
+            }
+            .status-bar {
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                background-color: rgba(37, 99, 235, 0.1);
+                z-index: 0;
+            }
+            .status span {
+                position: relative;
+                z-index: 1;
+                padding-left: 0.5rem;
+            }
+            .status.success {
+                color: var(--success-color);
+            }
+            .status.success .status-bar {
+                background-color: rgba(34, 197, 94, 0.1);
+            }
+            .status.warning {
+                color: var(--warning-color);
+            }
+            .status.warning .status-bar {
+                background-color: rgba(245, 158, 11, 0.1);
+            }
+            .status.error {
+                color: var(--error-color);
+            }
+            .status.error .status-bar {
+                background-color: rgba(239, 68, 68, 0.1);
+            }
+        `;
+        document.head.appendChild(styleSheet);
+    }
+
+    // Update the chart container with the table
+    document.querySelector('.chart-container').innerHTML = tableHTML;
+}
+
 function solve() {
     if (!isDataLoaded) {
         document.getElementById('result').innerHTML = "<p>Data is still loading. Please wait...</p>";
         return;
     }
     
-    // Check if we have enough data
     if (Object.keys(data).length === 0) {
         document.getElementById('result').innerHTML = "<p style='color:red'>Error: No food data was loaded. Please try reloading the page.</p>";
         return;
@@ -234,26 +472,22 @@ function solve() {
     console.log("Starting optimization with", Object.keys(data).length, "food items");
     
     try {
-        // Start with original constraints
         let model = {
             optimize: "grams",
             opType: "min",
             constraints: constraints,
             variables: data,
             options: {
-                tolerance: 0.2 // Increased tolerance
+                tolerance: 0.2
             }
         };
 
-        // Try to solve with original constraints
         let results = solver.Solve(model);
         let resultHTML = "<h2>Optimization Results</h2>";
         
-        // If not feasible, try with more relaxed constraints
         if (!results.feasible) {
             console.log("No solution with original constraints, trying relaxed constraints");
             
-            // Create relaxed constraints - reduce minimums by 30% and increase maximums by 30%
             const relaxedConstraints = {};
             for (const nutrient in constraints) {
                 relaxedConstraints[nutrient] = {};
@@ -266,80 +500,64 @@ function solve() {
             }
             
             model.constraints = relaxedConstraints;
-            model.options.tolerance = 0.3; // Further increase tolerance
+            model.options.tolerance = 0.3;
             
             results = solver.Solve(model);
             
             if (results.feasible) {
-                resultHTML += "<p><strong>Status:</strong> Solution found with relaxed constraints!</p>";
-                resultHTML += "<p><em>Note: Some nutritional requirements were relaxed to find a solution.</em></p>";
+                resultHTML += "<div class='warning'>Solution found with relaxed constraints. Some nutritional requirements were adjusted to find a feasible solution.</div>";
             }
         } else {
-            resultHTML += "<p><strong>Status:</strong> Solution found!</p>";
+            resultHTML += "<div style='color: var(--success-color); margin-bottom: 1rem;'>✓ Optimal solution found!</div>";
         }
         
         if (results.feasible) {
-            resultHTML += "<p><strong>Total grams needed:</strong> " + Math.round(results.result) + "g</p>";
+            resultHTML += `<div style='font-size: 1.25rem; margin-bottom: 1rem;'>
+                Total weight: <strong>${Math.round(results.result)}g</strong>
+            </div>`;
             
-            resultHTML += "<h3>Recommended Foods:</h3><ul>";
+            resultHTML += "<div class='food-list'>";
             
-            // Display the foods and amounts
             for (let foodName in results) {
                 if (foodName !== 'feasible' && foodName !== 'result' && foodName !== 'bounded' && 
                     foodName !== 'isIntegral' && results[foodName] > 0) {
-                    resultHTML += "<li>" + foodName + ": " + Math.round(results[foodName] * 100) / 100 + "g</li>";
+                    resultHTML += `
+                        <div class='food-item'>
+                            <h3>${foodName}</h3>
+                            <p style='color: var(--text-secondary);'>${Math.round(results[foodName] * 100) / 100}g</p>
+                        </div>
+                    `;
                 }
             }
             
-            resultHTML += "</ul>";
+            resultHTML += "</div>";
             
-            // If we couldn't find a solution with the relaxed constraints, try a different approach
+            // Update stats and chart
+            updateStats(results);
+            updateNutritionChart(results);
+            
         } else {
-            // If still not feasible, try a solution with fewer constraints
-            console.log("No solution with relaxed constraints, trying minimal constraints");
-            
-            // Try with just a few essential constraints
-            const minimalConstraints = {
-                "Protein (g)": { min: 40 },
-                "Vitamin C (mg)": { min: 30 },
-                "grams": { max: 2000 }
-            };
-            
-            model.constraints = minimalConstraints;
-            model.options.tolerance = 0.5; // Further increase tolerance
-            
-            results = solver.Solve(model);
-            
-            if (results.feasible) {
-                resultHTML += "<p><strong>Status:</strong> Basic solution found!</p>";
-                resultHTML += "<p><em>Warning: Only basic nutritional requirements were considered.</em></p>";
-                resultHTML += "<p><strong>Total grams needed:</strong> " + Math.round(results.result) + "g</p>";
-                
-                resultHTML += "<h3>Recommended Foods:</h3><ul>";
-                
-                // Display the foods and amounts
-                for (let foodName in results) {
-                    if (foodName !== 'feasible' && foodName !== 'result' && foodName !== 'bounded' && 
-                        foodName !== 'isIntegral' && results[foodName] > 0) {
-                        resultHTML += "<li>" + foodName + ": " + Math.round(results[foodName] * 100) / 100 + "g</li>";
-                    }
-                }
-                
-                resultHTML += "</ul>";
-            } else {
-                resultHTML += "<p><strong>Status:</strong> No feasible solution found.</p>";
-                resultHTML += "<p>The nutritional requirements could not be met with the available foods.</p>";
-                resultHTML += "<p>Suggestions:</p><ul>";
-                resultHTML += "<li>Check if the CSV data is properly formatted</li>";
-                resultHTML += "<li>Verify that the food data includes nutritional information for the constraints</li>";
-                resultHTML += "<li>Try with a different set of food items</li></ul>";
-            }
+            resultHTML += `
+                <div style='color: var(--error-color); margin-bottom: 1rem;'>
+                    No feasible solution found
+                </div>
+                <p>The nutritional requirements could not be met with the available foods.</p>
+                <ul style='color: var(--text-secondary);'>
+                    <li>Check if the CSV data is properly formatted</li>
+                    <li>Verify that the food data includes nutritional information for the constraints</li>
+                    <li>Try with a different set of food items</li>
+                </ul>
+            `;
         }
         
         document.getElementById('result').innerHTML = resultHTML;
     } catch (error) {
         console.error("Error during optimization:", error);
-        document.getElementById('result').innerHTML = "<p style='color:red'>Error during optimization: " + error.message + "</p>";
+        document.getElementById('result').innerHTML = `
+            <div style='color: var(--error-color);'>
+                Error during optimization: ${error.message}
+            </div>
+        `;
     }
 }
 
@@ -377,13 +595,15 @@ function displayFoodList() {
         return;
     }
     
-    let html = '<h2>Available Foods</h2><div class="food-list">';
+    let html = '<div class="food-list">';
     
     for (let foodName in data) {
         html += `
-            <div class="food-item">
+            <div class='food-item'>
                 <h3>${foodName}</h3>
-                <p>Public Food Key: ${data[foodName]["Public Food Key"] || 'N/A'}</p>
+                <p style='color: var(--text-secondary);'>
+                    ${data[foodName]["Public Food Key"] || 'No ID'}
+                </p>
             </div>
         `;
     }

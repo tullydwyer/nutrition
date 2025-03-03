@@ -4,182 +4,303 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nutrition Optimizer</title>
-    <!-- Removed XLSX libraries since we now use CSV format -->
     <script src="https://unpkg.com/javascript-lp-solver/prod/solver.js"></script>
-    <script src="https://unpkg.com/isotope-layout@3/dist/isotope.pkgd.min.js"></script>
-    <!-- <script src="https://unpkg.com/yalps@0.5.5/lib/main/index.js"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="text/javascript" src="./main.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #3b82f6;
+            --success-color: #22c55e;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --background-color: #f8fafc;
+            --card-background: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+        }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            line-height: 1.5;
+        }
+
+        .header {
+            background-color: var(--primary-color);
+            padding: 0.75rem;
+            color: white;
+            margin-bottom: 1rem;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            display: inline-block;
+        }
+
+        .header p {
+            margin: 0;
+            display: inline-block;
+            margin-left: 1rem;
+            font-size: 0.875rem;
+            opacity: 0.9;
+        }
+
+        .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
-            line-height: 1.6;
+            padding: 0 0.75rem;
         }
-        h1, h2, h3 {
-            color: #333;
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
         }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            .header p {
+                display: none;
+            }
+        }
+
+        .card {
+            background: var(--card-background);
+            border-radius: 0.375rem;
+            padding: 1rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            margin: 0 0 0.75rem 0;
+            font-size: 1.125rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-card {
+            background: var(--card-background);
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            text-align: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h3 {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            margin: 0 0 0.25rem 0;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+
+        .stat-card .value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
         button {
-            background-color: #4CAF50;
+            background-color: var(--primary-color);
             color: white;
-            padding: 10px 20px;
+            padding: 0.5rem 1rem;
             border: none;
-            border-radius: 4px;
+            border-radius: 0.375rem;
             cursor: pointer;
-            font-size: 16px;
-            margin: 10px 0;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: background-color 0.2s;
         }
+
         button:hover {
-            background-color: #45a049;
+            background-color: var(--secondary-color);
         }
-        #result {
-            margin-top: 20px;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background-color: #f9f9f9;
-        }
+
         .food-list {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 0.75rem;
         }
+
         .food-item {
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 10px;
-            background-color: #fff;
+            background: var(--card-background);
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s;
+            font-size: 0.875rem;
         }
+
+        .food-item:hover {
+            transform: translateY(-2px);
+        }
+
         .food-item h3 {
-            margin-top: 0;
-            margin-bottom: 5px;
-            font-size: 18px;
+            margin: 0 0 0.25rem 0;
+            font-size: 0.875rem;
         }
-        .container {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
+
+        .chart-container {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: var(--card-background);
+            border-radius: 0.375rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }
-        @media (min-width: 768px) {
-            .container {
-                flex-direction: row;
-            }
-            .left-panel {
-                flex: 1;
-            }
-            .right-panel {
-                flex: 2;
-            }
-        }
-        #debug-info {
-            background-color: #f8f9fa;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            padding: 10px;
-            margin-top: 20px;
-            font-family: monospace;
-            font-size: 14px;
-            display: none;
-        }
-        .debug-toggle {
-            background-color: #6c757d;
-            color: white;
-            padding: 5px 10px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            margin-top: 10px;
-        }
+
         .warning {
             background-color: #fff3cd;
-            color: #856404;
-            padding: 10px;
-            border-radius: 4px;
-            margin-bottom: 15px;
+            border-left: 3px solid var(--warning-color);
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+        }
+
+        #result {
+            margin-top: 1rem;
+        }
+
+        .nutrition-chart {
+            height: 250px;
+            margin-bottom: 1rem;
+        }
+
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Add styles for the nutrition details section */
+        .nutrition-details {
+            margin-top: 1.5rem;
+        }
+
+        .nutrition-details h3 {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin: 0 0 0.75rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .legend {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+            font-size: 0.75rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .legend-color {
+            width: 0.75rem;
+            height: 0.75rem;
+            border-radius: 2px;
+        }
+
+        .legend-success {
+            background-color: rgba(34, 197, 94, 0.2);
+        }
+
+        .legend-warning {
+            background-color: rgba(245, 158, 11, 0.2);
+        }
+
+        .legend-error {
+            background-color: rgba(239, 68, 68, 0.2);
         }
     </style>
 </head>
 
 <body>
-    <h1>Nutrition Optimizer</h1>
-    <p>This tool helps you find the optimal combination of foods to meet your nutritional requirements with minimal total weight.</p>
-    
-    <div class="warning">
-        Note: The optimization process may take a few moments to complete. If no solution is found, the system will attempt to relax constraints to find a feasible solution.
+    <div class="header">
+        <div class="container">
+            <h1>Nutrition Optimizer</h1>
+            <p>Find optimal food combinations for your nutritional needs</p>
+        </div>
     </div>
-    
-    <button type="button" onclick="fun()">Load Data & Solve</button>
-    
+
     <div class="container">
-        <div class="left-panel">
-            <div id="checkbox-filter">
-                <p>Loading data...</p>
+        <div class="warning">
+            Note: Optimization may take a moment. The system will attempt to relax constraints if no solution is found.
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Foods</h3>
+                <div class="value" id="total-foods">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Weight</h3>
+                <div class="value" id="total-weight">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Nutrients</h3>
+                <div class="value" id="nutrients-met">-</div>
             </div>
         </div>
-        
-        <div class="right-panel">
-            <div id="result">
-                <p>Click "Load Data & Solve" to start the optimization process.</p>
+
+        <div class="actions">
+            <button type="button" onclick="fun()" class="primary-button">Optimize Nutrition</button>
+        </div>
+
+        <div class="main-content">
+            <div class="card">
+                <h2>Available Foods</h2>
+                <div id="checkbox-filter" class="food-list">
+                    <p>Loading data...</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Results</h2>
+                <div id="result">
+                    <p>Click "Optimize Nutrition" to start the process.</p>
+                </div>
+                <div class="nutrition-details">
+                    <h3>Nutrition Levels</h3>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-color legend-success"></div>
+                            <span>Met</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-warning"></div>
+                            <span>Close</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-error"></div>
+                            <span>Not Met</span>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <!-- Table will be inserted here -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    
-    <button class="debug-toggle" onclick="toggleDebug()">Show/Hide Debug Info</button>
-    <div id="debug-info">
-        <h3>Debug Information</h3>
-        <p>Check console for more detailed logs.</p>
-        <div id="debug-content"></div>
-    </div>
-    
-    <script>
-        // Function to toggle debug info visibility
-        function toggleDebug() {
-            const debugInfo = document.getElementById('debug-info');
-            if (debugInfo.style.display === 'none' || debugInfo.style.display === '') {
-                debugInfo.style.display = 'block';
-                
-                // Display basic debug info
-                let debugContent = '';
-                
-                // Check if data is loaded
-                if (typeof isDataLoaded !== 'undefined') {
-                    debugContent += `<p>Data loaded: ${isDataLoaded}</p>`;
-                }
-                
-                // Check if data object exists and show number of items
-                if (typeof data !== 'undefined') {
-                    const dataKeys = Object.keys(data);
-                    debugContent += `<p>Number of food items: ${dataKeys.length}</p>`;
-                    
-                    // List some constraint properties that might be missing
-                    const missingConstraints = [];
-                    for (const nutrient in constraints) {
-                        let found = false;
-                        for (const food in data) {
-                            if (data[food][nutrient] !== undefined) {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (!found) {
-                            missingConstraints.push(nutrient);
-                        }
-                    }
-                    
-                    if (missingConstraints.length > 0) {
-                        debugContent += `<p style="color:red">Missing constraint data for: ${missingConstraints.join(', ')}</p>`;
-                    }
-                }
-                
-                document.getElementById('debug-content').innerHTML = debugContent;
-            } else {
-                debugInfo.style.display = 'none';
-            }
-        }
-    </script>
 </body>
 </html> 
 
