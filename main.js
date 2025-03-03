@@ -73,8 +73,28 @@ const EPSILON = 0.0001;  // Small tolerance for floating point comparison (0.01%
 var data = {};
 var csvParser;
 var isDataLoaded = false;
+var enabledFoods = new Set(); // Store enabled food items
 
 let nutritionChart = null;
+
+function toggleFood(foodName) {
+    if (enabledFoods.has(foodName)) {
+        enabledFoods.delete(foodName);
+    } else {
+        enabledFoods.add(foodName);
+    }
+    
+    // Update the UI to reflect the change
+    const foodItem = document.querySelector(`[data-food-name="${foodName}"]`);
+    if (foodItem) {
+        foodItem.classList.toggle('disabled', !enabledFoods.has(foodName));
+    }
+    
+    // Re-run optimization if data is loaded
+    if (isDataLoaded) {
+        solve();
+    }
+}
 
 class ExcelToJSON {
     constructor() {
@@ -169,8 +189,8 @@ class ExcelToJSON {
                         for (var prop in json_object[i]) {
                             var cleanProp = prop.replace(/(\r\n|\n|\r)/gm, "").replace("&#10;", "");
                             
-                            // Skip non-numeric for optimization except Food Name
-                            if (prop !== "Food Name" && isNaN(json_object[i][prop])) {
+                            // Skip non-numeric for optimization except Food Name and enabled
+                            if (prop !== "Food Name" && prop !== "enabled" && isNaN(json_object[i][prop])) {
                                 continue;
                             }
                             
@@ -182,29 +202,16 @@ class ExcelToJSON {
                                 objects[foodName][cleanProp] = json_object[i][prop];
                             }
                         }
+
+                        // Add to enabledFoods if enabled in CSV
+                        if (json_object[i]["enabled"] === 1) {
+                            enabledFoods.add(foodName);
+                        }
                     }
                 }
 
                 console.log("Final data object created");
                 console.log("Number of food items loaded:", Object.keys(objects).length);
-                
-                // Debug: Log a sample food item to check the data format
-                const sampleKey = Object.keys(objects)[0];
-                if (sampleKey) {
-                    console.log("Sample food item:", sampleKey, objects[sampleKey]);
-                }
-                
-                // Debug: Check if our constraint properties exist in the data
-                for (const nutrient in constraints) {
-                    let foundInAnyFood = false;
-                    for (const food in objects) {
-                        if (objects[food][nutrient] !== undefined) {
-                            foundInAnyFood = true;
-                            break;
-                        }
-                    }
-                    console.log(`Constraint "${nutrient}" ${foundInAnyFood ? 'found' : 'NOT FOUND'} in food data`);
-                }
                 
                 data = objects;
                 isDataLoaded = true;
@@ -472,11 +479,19 @@ function solve() {
     console.log("Starting optimization with", Object.keys(data).length, "food items");
     
     try {
+        // Filter out disabled foods
+        const enabledFoodData = {};
+        for (const foodName in data) {
+            if (enabledFoods.has(foodName)) {
+                enabledFoodData[foodName] = data[foodName];
+            }
+        }
+
         let model = {
             optimize: "grams",
             opType: "min",
             constraints: constraints,
-            variables: data,
+            variables: enabledFoodData,
             options: {
                 tolerance: 0.2
             }
@@ -598,12 +613,19 @@ function displayFoodList() {
     let html = '<div class="food-list">';
     
     for (let foodName in data) {
+        const isEnabled = enabledFoods.has(foodName);
         html += `
-            <div class='food-item'>
-                <h3>${foodName}</h3>
-                <p style='color: var(--text-secondary);'>
-                    ${data[foodName]["Public Food Key"] || 'No ID'}
-                </p>
+            <div class='food-item ${!isEnabled ? 'disabled' : ''}' data-food-name="${foodName}">
+                <div class="food-item-info">
+                    <h3>${foodName}</h3>
+                    <p style='color: var(--text-secondary);'>
+                        ${data[foodName]["Public Food Key"] || 'No ID'}
+                    </p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleFood('${foodName.replace(/'/g, "\\'")}')">
+                    <span class="toggle-slider"></span>
+                </label>
             </div>
         `;
     }
