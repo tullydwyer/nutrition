@@ -290,6 +290,25 @@
         .toggle-switch input:checked + .toggle-slider:before {
             transform: translateX(16px);
         }
+
+        /* Add styles for the search input */
+        .search-container {
+            margin-bottom: 1rem;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .search-input:focus {
+            border-color: var(--primary-color);
+        }
     </style>
 </head>
 
@@ -328,6 +347,9 @@
         <div class="main-content">
             <div class="card">
                 <h2>Available Foods</h2>
+                <div class="search-container">
+                    <input type="text" id="food-search" placeholder="Search foods..." class="search-input" oninput="filterFoodList(this.value)">
+                </div>
                 <div id="checkbox-filter" class="food-list">
                     <p>Loading data...</p>
                 </div>

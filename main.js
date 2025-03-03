@@ -77,6 +77,18 @@ var enabledFoods = new Set(); // Store enabled food items
 
 let nutritionChart = null;
 
+// Add functions for localStorage management
+function saveEnabledFoods() {
+    localStorage.setItem('enabledFoods', JSON.stringify(Array.from(enabledFoods)));
+}
+
+function loadEnabledFoods() {
+    const saved = localStorage.getItem('enabledFoods');
+    if (saved) {
+        enabledFoods = new Set(JSON.parse(saved));
+    }
+}
+
 function toggleFood(foodName) {
     if (enabledFoods.has(foodName)) {
         enabledFoods.delete(foodName);
@@ -89,6 +101,9 @@ function toggleFood(foodName) {
     if (foodItem) {
         foodItem.classList.toggle('disabled', !enabledFoods.has(foodName));
     }
+    
+    // Save to localStorage
+    saveEnabledFoods();
     
     // Re-run optimization if data is loaded
     if (isDataLoaded) {
@@ -203,8 +218,8 @@ class ExcelToJSON {
                             }
                         }
 
-                        // Add to enabledFoods if enabled in CSV
-                        if (json_object[i]["enabled"] === 1) {
+                        // Add to enabledFoods if enabled in CSV and no localStorage data exists
+                        if (localStorage.getItem('enabledFoods') === null && json_object[i]["enabled"] === 1) {
                             enabledFoods.add(foodName);
                         }
                     }
@@ -580,6 +595,9 @@ function fun() {
     console.log("Loading and processing data...");
     document.getElementById("result").innerHTML = "<p>Loading and processing nutritional data...</p>";
     
+    // Load saved foods from localStorage
+    loadEnabledFoods();
+    
     if (!csvParser) {
         csvParser = new ExcelToJSON();
     }
@@ -632,6 +650,19 @@ function displayFoodList() {
     
     html += '</div>';
     document.getElementById('checkbox-filter').innerHTML = html;
+}
+
+function filterFoodList(searchTerm) {
+    if (!isDataLoaded) return;
+    
+    searchTerm = searchTerm.toLowerCase();
+    const foodItems = document.querySelectorAll('.food-item');
+    
+    foodItems.forEach(item => {
+        const foodName = item.getAttribute('data-food-name').toLowerCase();
+        const shouldShow = foodName.includes(searchTerm);
+        item.style.display = shouldShow ? '' : 'none';
+    });
 }
 
 // Load data when the page loads
