@@ -96,12 +96,6 @@ function toggleFood(foodName) {
         enabledFoods.add(foodName);
     }
     
-    // Update the UI to reflect the change
-    const foodItem = document.querySelector(`[data-food-name="${foodName}"]`);
-    if (foodItem) {
-        foodItem.classList.toggle('disabled', !enabledFoods.has(foodName));
-    }
-    
     // Save to localStorage
     saveEnabledFoods();
     
@@ -109,6 +103,9 @@ function toggleFood(foodName) {
     if (isDataLoaded) {
         solve();
     }
+
+    // Update the display to reflect the new order
+    displayFoodList();
 }
 
 class ExcelToJSON {
