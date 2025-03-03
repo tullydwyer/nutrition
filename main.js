@@ -542,6 +542,22 @@ function solve() {
         }
         
         if (results.feasible) {
+            // Move the stats grid here
+            resultHTML += `<div class='stats-grid'>
+                <div class='stat-card'>
+                    <h3>Foods</h3>
+                    <div class='value' id='total-foods'>-</div>
+                </div>
+                <div class='stat-card'>
+                    <h3>Weight</h3>
+                    <div class='value' id='total-weight'>-</div>
+                </div>
+                <div class='stat-card'>
+                    <h3>Nutrients</h3>
+                    <div class='value' id='nutrients-met'>-</div>
+                </div>
+            </div>`;
+
             resultHTML += `<div style='font-size: 1.25rem; margin-bottom: 1rem;'>
                 Total weight: <strong>${Math.round(results.result)}g</strong>
             </div>`;
@@ -562,7 +578,10 @@ function solve() {
             
             resultHTML += "</div>";
             
-            // Update stats and chart
+            // First set the HTML content
+            document.getElementById('result').innerHTML = resultHTML;
+            
+            // Then update stats and chart after the elements exist in the DOM
             updateStats(results);
             updateNutritionChart(results);
             
@@ -578,9 +597,10 @@ function solve() {
                     <li>Try with a different set of food items</li>
                 </ul>
             `;
+            
+            document.getElementById('result').innerHTML = resultHTML;
         }
         
-        document.getElementById('result').innerHTML = resultHTML;
     } catch (error) {
         console.error("Error during optimization:", error);
         document.getElementById('result').innerHTML = `

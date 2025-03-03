@@ -90,7 +90,10 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 0.75rem;
-            margin-bottom: 1rem;
+            margin: 0.75rem 0 1.25rem 0;
+            padding: 0.75rem;
+            background: var(--background-color);
+            border-radius: 0.375rem;
         }
 
         .stat-card {
@@ -115,16 +118,23 @@
             color: var(--primary-color);
         }
 
+        .actions {
+            margin: 0 0 1.25rem 0;
+            display: flex;
+            gap: 0.5rem;
+        }
+
         button {
             background-color: var(--primary-color);
             color: white;
-            padding: 0.5rem 1rem;
+            padding: 0.75rem 1.25rem;
             border: none;
             border-radius: 0.375rem;
             cursor: pointer;
             font-size: 0.875rem;
             font-weight: 500;
             transition: background-color 0.2s;
+            width: 100%;
         }
 
         button:hover {
@@ -132,9 +142,11 @@
         }
 
         .food-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-height: 500px;
+            overflow-y: auto;
         }
 
         .food-item {
@@ -143,28 +155,52 @@
             justify-content: space-between;
             background: var(--card-background);
             border-radius: 0.375rem;
-            padding: 0.75rem;
+            padding: 0.5rem 0.75rem;
             border: 1px solid var(--border-color);
             transition: all 0.2s;
             font-size: 0.875rem;
         }
 
         .food-item:hover {
-            transform: translateY(-2px);
+            transform: none;
+            background-color: var(--background-color);
         }
 
         .food-item h3 {
-            margin: 0 0 0.25rem 0;
+            margin: 0;
             font-size: 0.875rem;
+            font-weight: 500;
         }
 
         .food-item.disabled {
             opacity: 0.5;
-            background-color: var(--background-color);
         }
 
         .food-item-info {
             flex: 1;
+        }
+
+        .food-item-info p {
+            display: none;  /* Hide the food ID to make it more compact */
+        }
+
+        /* Add a scrollbar styling for the food list */
+        .food-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .food-list::-webkit-scrollbar-track {
+            background: var(--background-color);
+            border-radius: 4px;
+        }
+
+        .food-list::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        .food-list::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
         }
 
         .chart-container {
@@ -193,13 +229,6 @@
             margin-bottom: 1rem;
         }
 
-        .actions {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-        }
-
-        /* Add styles for the nutrition details section */
         .nutrition-details {
             margin-top: 1.5rem;
         }
@@ -321,25 +350,6 @@
     </div>
 
     <div class="container">
-        <div class="stats-grid">
-            <div class="stat-card">
-                <h3>Foods</h3>
-                <div class="value" id="total-foods">-</div>
-            </div>
-            <div class="stat-card">
-                <h3>Weight</h3>
-                <div class="value" id="total-weight">-</div>
-            </div>
-            <div class="stat-card">
-                <h3>Nutrients</h3>
-                <div class="value" id="nutrients-met">-</div>
-            </div>
-        </div>
-
-        <div class="actions">
-            <button type="button" onclick="fun()" class="primary-button">Optimize Nutrition</button>
-        </div>
-
         <div class="main-content">
             <div class="card">
                 <h2>Available Foods</h2>
@@ -353,6 +363,9 @@
 
             <div class="card">
                 <h2>Results</h2>
+                <div class="actions">
+                    <button type="button" onclick="fun()" class="primary-button">Optimize Nutrition</button>
+                </div>
                 <div id="result">
                     <p>Click "Optimize Nutrition" to start the process.</p>
                 </div>
