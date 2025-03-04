@@ -297,19 +297,31 @@ function updateStats(results) {
 function updateNutritionChart(results) {
     const nutrients = {};
     const requirements = {};
+    const foodContributions = {};  // Track contributions per food
     
-    // Calculate total nutrients
+    // Calculate total nutrients and track contributions per food
     for (const nutrient in constraints) {
         if (nutrient === 'grams') continue;
         
         nutrients[nutrient] = 0;
         requirements[nutrient] = constraints[nutrient].min || constraints[nutrient].max || 0;
+        foodContributions[nutrient] = [];
         
         for (const food in results) {
             if (food !== 'feasible' && food !== 'result' && food !== 'bounded' && food !== 'isIntegral' && results[food] > 0) {
-                nutrients[nutrient] += (data[food][nutrient] || 0) * results[food];
+                const contribution = (data[food][nutrient] || 0) * results[food];
+                nutrients[nutrient] += contribution;
+                if (contribution > 0) {
+                    foodContributions[nutrient].push({
+                        food: food,
+                        amount: contribution,
+                        percentage: (contribution / nutrients[nutrient]) * 100
+                    });
+                }
             }
         }
+        // Sort contributions by amount
+        foodContributions[nutrient].sort((a, b) => b.amount - a.amount);
     }
 
     // Create table HTML
@@ -337,16 +349,14 @@ function updateNutritionChart(results) {
         const unitMatch = nutrient.match(/\((.*?)\)/g);
         let unit = '';
         if (unitMatch) {
-            // Take the last unit in parentheses
             const lastUnit = unitMatch[unitMatch.length - 1];
             unit = lastUnit.replace(/[()]/g, '').trim();
         }
 
-        // Build the requirements text
+        // Build the requirements text and determine status
         let requirementsText = '';
         if (constraints[nutrient].min && constraints[nutrient].max) {
             requirementsText = `${constraints[nutrient].min} - ${constraints[nutrient].max} ${unit}`;
-            // Check both min and max
             if (currentAmount >= constraints[nutrient].min - EPSILON && currentAmount <= constraints[nutrient].max + EPSILON) {
                 status = '✓ Within range';
                 statusClass = 'success';
@@ -382,17 +392,38 @@ function updateNutritionChart(results) {
             }
         }
 
-        // Clean up nutrient name and ensure unit is shown consistently
+        // Clean up nutrient name
         const cleanNutrientName = nutrient.replace(/\s*\([^)]*\)/, '');
         
+        // Create expandable row with food contributions
+        const contributionsHTML = foodContributions[nutrient].map(contribution => `
+            <div class="food-contribution">
+                <span class="food-name">${contribution.food}</span>
+                <div class="contribution-bar-container">
+                    <div class="contribution-bar" style="width: ${contribution.percentage}%"></div>
+                    <span class="contribution-amount">${Math.round(contribution.amount * 100) / 100} ${unit}</span>
+                </div>
+            </div>
+        `).join('');
+
+        // Generate unique ID for the nutrient row
+        const nutrientId = cleanNutrientName.toLowerCase().replace(/\s+/g, '-');
+
         tableHTML += `
-            <tr>
+            <tr class="nutrient-row" data-target="${nutrientId}" onclick="toggleNutrientDetails(this)">
                 <td>${cleanNutrientName}</td>
                 <td class="numeric">${currentAmount} ${unit}</td>
                 <td class="numeric">${requirementsText}</td>
                 <td class="status ${statusClass}">
                     <div class="status-bar" style="width: ${Math.min(100, percentage)}%"></div>
                     <span>${status}</span>
+                </td>
+            </tr>
+            <tr class="nutrient-details" id="${nutrientId}-details" style="max-height: 0;">
+                <td colspan="4">
+                    <div class="contributions-container">
+                        ${contributionsHTML}
+                    </div>
                 </td>
             </tr>
         `;
@@ -404,77 +435,58 @@ function updateNutritionChart(results) {
         </div>
     `;
 
-    // Add table styles
-    if (!document.getElementById('nutrition-table-styles')) {
-        const styleSheet = document.createElement('style');
-        styleSheet.id = 'nutrition-table-styles';
-        styleSheet.textContent = `
-            .nutrition-table-container {
-                overflow-x: auto;
-                margin-top: 1rem;
-            }
-            .nutrition-table {
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 0.875rem;
-            }
-            .nutrition-table th,
-            .nutrition-table td {
-                padding: 0.5rem;
-                text-align: left;
-                border-bottom: 1px solid var(--border-color);
-                white-space: nowrap;
-            }
-            .nutrition-table th {
-                background-color: var(--background-color);
-                font-weight: 500;
-                color: var(--text-secondary);
-            }
-            .nutrition-table .numeric {
-                font-family: monospace;
-                text-align: right;
-            }
-            .nutrition-table .status {
-                position: relative;
-                width: 150px;
-            }
-            .status-bar {
-                position: absolute;
-                left: 0;
-                top: 0;
-                bottom: 0;
-                background-color: rgba(37, 99, 235, 0.1);
-                z-index: 0;
-            }
-            .status span {
-                position: relative;
-                z-index: 1;
-                padding-left: 0.5rem;
-            }
-            .status.success {
-                color: var(--success-color);
-            }
-            .status.success .status-bar {
-                background-color: rgba(34, 197, 94, 0.1);
-            }
-            .status.warning {
-                color: var(--warning-color);
-            }
-            .status.warning .status-bar {
-                background-color: rgba(245, 158, 11, 0.1);
-            }
-            .status.error {
-                color: var(--error-color);
-            }
-            .status.error .status-bar {
-                background-color: rgba(239, 68, 68, 0.1);
-            }
-        `;
-        document.head.appendChild(styleSheet);
-    }
-
     // Update the chart container with the table
     document.querySelector('.chart-container').innerHTML = tableHTML;
+}
+
+// Add function to toggle nutrient details
+function toggleNutrientDetails(row) {
+    // Get the target details row
+    const targetId = row.getAttribute('data-target');
+    const detailsRow = document.getElementById(`${targetId}-details`);
+    
+    if (!detailsRow) return;
+    
+    const isExpanded = row.classList.contains('expanded');
+    
+    // First collapse all other rows
+    document.querySelectorAll('.nutrient-row.expanded').forEach(expandedRow => {
+        if (expandedRow !== row) {
+            expandedRow.classList.remove('expanded');
+            const expandedDetailsId = expandedRow.getAttribute('data-target');
+            const expandedDetails = document.getElementById(`${expandedDetailsId}-details`);
+            if (expandedDetails) {
+                expandedDetails.classList.remove('expanded');
+                expandedDetails.style.maxHeight = '0';
+                // Wait for transition before hiding
+                setTimeout(() => {
+                    if (!expandedDetails.classList.contains('expanded')) {
+                        expandedDetails.style.display = 'none';
+                    }
+                }, 300);
+            }
+        }
+    });
+    
+    // Toggle the clicked row
+    if (!isExpanded) {
+        detailsRow.style.display = 'table-row';
+        // Force a reflow
+        detailsRow.offsetHeight;
+        row.classList.add('expanded');
+        detailsRow.classList.add('expanded');
+        detailsRow.style.maxHeight = detailsRow.scrollHeight + 'px';
+    } else {
+        row.classList.remove('expanded');
+        detailsRow.classList.remove('expanded');
+        detailsRow.style.maxHeight = '0';
+        // Wait for transition before hiding
+        setTimeout(() => {
+            if (!detailsRow.classList.contains('expanded')) {
+                detailsRow.style.display = 'none';
+            }
+        }, 300);
+    }
 }
 
 function solve() {

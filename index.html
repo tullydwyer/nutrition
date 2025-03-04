@@ -382,6 +382,190 @@
         .search-input:focus {
             border-color: var(--primary-color);
         }
+
+        /* Nutrition table styles */
+        .nutrition-table-container {
+            overflow-x: auto;
+            margin-top: 1rem;
+        }
+        
+        .nutrition-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+        
+        .nutrition-table th,
+        .nutrition-table td {
+            padding: 0.5rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+        
+        .nutrition-table th {
+            background-color: var(--background-color);
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+        
+        .nutrition-table .numeric {
+            font-family: monospace;
+            text-align: right;
+        }
+        
+        .nutrition-table .status {
+            position: relative;
+            width: 150px;
+        }
+        
+        .status-bar {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            background-color: rgba(37, 99, 235, 0.1);
+            z-index: 0;
+        }
+        
+        .status span {
+            position: relative;
+            z-index: 1;
+            padding-left: 0.5rem;
+        }
+        
+        .status.success {
+            color: var(--success-color);
+        }
+        
+        .status.success .status-bar {
+            background-color: rgba(34, 197, 94, 0.1);
+        }
+        
+        .status.warning {
+            color: var(--warning-color);
+        }
+        
+        .status.warning .status-bar {
+            background-color: rgba(245, 158, 11, 0.1);
+        }
+        
+        .status.error {
+            color: var(--error-color);
+        }
+        
+        .status.error .status-bar {
+            background-color: rgba(239, 68, 68, 0.1);
+        }
+
+        /* Nutrient details styles */
+        .nutrient-row {
+            cursor: pointer;
+            transition: background-color 0.2s;
+            position: relative;
+        }
+
+        .nutrient-row:hover {
+            background-color: var(--background-color);
+        }
+
+        .nutrient-row::after {
+            content: '▼';
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            transition: transform 0.3s ease;
+        }
+
+        .nutrient-row.expanded::after {
+            transform: translateY(-50%) rotate(180deg);
+        }
+
+        .nutrient-details {
+            background-color: var(--background-color);
+            overflow: hidden;
+            max-height: 0;
+            transition: all 0.3s ease-out;
+            border-left: 3px solid transparent;
+            margin: 0;
+            opacity: 0;
+            visibility: hidden;
+            display: none;
+        }
+
+        .nutrient-details.expanded {
+            border-left-color: var(--primary-color);
+            border-bottom: 1px solid var(--border-color);
+            opacity: 1;
+            visibility: visible;
+            display: table-row;
+        }
+
+        .nutrient-details td {
+            padding: 0;
+        }
+
+        .nutrient-details.expanded td {
+            padding: 0.5rem;
+        }
+
+        .contributions-container {
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            background-color: var(--card-background);
+            overflow: hidden;
+        }
+
+        .food-contribution {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 0.75rem;
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            background-color: var(--background-color);
+        }
+
+        .food-name {
+            flex: 0 0 200px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .contribution-bar-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            height: 20px;
+            background-color: rgba(37, 99, 235, 0.05);
+            border-radius: 4px;
+            padding: 0 0.5rem;
+        }
+
+        .contribution-bar {
+            height: 4px;
+            background-color: var(--primary-color);
+            border-radius: 2px;
+            opacity: 0.3;
+        }
+
+        .contribution-amount {
+            color: var(--text-secondary);
+            font-family: monospace;
+            min-width: 80px;
+            text-align: right;
+            font-weight: 500;
+        }
+
+        .nutrient-details.expanded .contributions-container {
+            padding: 0.75rem;
+        }
     </style>
 </head>
 
