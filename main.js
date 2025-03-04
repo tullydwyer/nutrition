@@ -80,6 +80,196 @@ var dailyFraction = 1; // Store the daily intake fraction
 
 let nutritionChart = null;
 
+// Add function to recommend foods for missing nutrients
+function recommendFoodsForMissingNutrients(nutrientDeficits) {
+    if (!isDataLoaded || Object.keys(nutrientDeficits).length === 0) {
+        return [];
+    }
+
+    console.log("Finding food recommendations for nutrient deficits:", nutrientDeficits);
+    
+    // Track recommendations for each nutrient
+    const recommendationsByNutrient = {};
+    
+    // For each deficit nutrient, find top foods
+    for (const nutrient in nutrientDeficits) {
+        // Skip 'grams' as it's not a real nutrient
+        if (nutrient === 'grams') continue;
+        
+        // Get all foods that have this nutrient
+        const foodsWithNutrient = [];
+        
+        // Log how many foods we have
+        let totalFoodsChecked = 0;
+        let foodsWithNutrientCount = 0;
+        let enabledFoodsWithNutrient = 0;
+        
+        for (const foodName in data) {
+            totalFoodsChecked++;
+            
+            if (data[foodName][nutrient] && data[foodName][nutrient] > 0) {
+                foodsWithNutrientCount++;
+                
+                // Check if already enabled
+                if (enabledFoods.has(foodName)) {
+                    enabledFoodsWithNutrient++;
+                    continue; // Skip if already enabled
+                }
+                
+                // Calculate nutrient density (amount per 100g)
+                const density = data[foodName][nutrient];
+                
+                // Calculate how many grams needed to meet the deficit
+                const gramsNeeded = nutrientDeficits[nutrient] / density * 100;
+                
+                foodsWithNutrient.push({
+                    foodName,
+                    nutrientValue: data[foodName][nutrient],
+                    gramsNeeded,
+                    density
+                });
+            }
+        }
+        
+        console.log(`Nutrient ${nutrient}: Checked ${totalFoodsChecked} foods, ${foodsWithNutrientCount} have it, ${enabledFoodsWithNutrient} already enabled, ${foodsWithNutrient.length} viable recommendations`);
+        
+        // Sort by nutrient density (highest first)
+        foodsWithNutrient.sort((a, b) => b.density - a.density);
+        
+        // Take top 5 foods
+        recommendationsByNutrient[nutrient] = foodsWithNutrient.slice(0, 5);
+    }
+    
+    // Combine and score recommendations across nutrients
+    const allRecommendations = {};
+    
+    for (const nutrient in recommendationsByNutrient) {
+        for (const food of recommendationsByNutrient[nutrient]) {
+            if (!allRecommendations[food.foodName]) {
+                allRecommendations[food.foodName] = {
+                    foodName: food.foodName,
+                    score: 0,
+                    nutrients: {},
+                    nutrientCount: 0
+                };
+            }
+            
+            // Add score based on nutrient density ranking
+            allRecommendations[food.foodName].score += food.density;
+            
+            // Track which nutrients this food helps with
+            allRecommendations[food.foodName].nutrients[nutrient] = {
+                value: food.nutrientValue,
+                gramsNeeded: food.gramsNeeded
+            };
+            
+            // Count how many different nutrients this food addresses
+            allRecommendations[food.foodName].nutrientCount += 1;
+        }
+    }
+    
+    console.log("Combined recommendations:", Object.keys(allRecommendations).length);
+    
+    // Convert to array and sort by nutrient count first, then by score
+    const sortedRecommendations = Object.values(allRecommendations)
+        .sort((a, b) => {
+            // First prioritize foods that address more nutrients
+            if (b.nutrientCount !== a.nutrientCount) {
+                return b.nutrientCount - a.nutrientCount;
+            }
+            // Then sort by nutrient density score
+            return b.score - a.score;
+        })
+        .slice(0, 10); // Limit to top 10 recommendations
+    
+    return sortedRecommendations;
+}
+
+// Function to display food recommendations
+function displayRecommendations(recommendations, nutrientDeficits) {
+    if (recommendations.length === 0) {
+        return '';
+    }
+    
+    let html = `
+        <div id="food-recommendations" class="nutrition-details" style="margin-top: 1rem;">
+            <h3>Recommended Foods</h3>
+            <p>These foods can help address your nutritional deficits:</p>
+            <div class="food-list">
+    `;
+    
+    recommendations.forEach(rec => {
+        // Create list of nutrients this food helps with
+        let nutrientsList = '';
+        for (const nutrient in rec.nutrients) {
+            // Clean nutrient name
+            const cleanNutrientName = nutrient.replace(/\s*\([^)]*\)/, '');
+            
+            // Get unit
+            const unitMatch = nutrient.match(/\((.*?)\)/);
+            const unit = unitMatch ? unitMatch[1] : '';
+            
+            // Calculate percentage contribution
+            let percentContrib = Math.round((rec.nutrients[nutrient].value / (nutrientDeficits[nutrient] / 100)) * 100);
+            percentContrib = Math.min(percentContrib, 100); // Cap at 100%
+            
+            nutrientsList += `
+                <div class="nutrient-item">
+                    <div class="nutrient-item-header">
+                        <span>${cleanNutrientName}</span>
+                        <div style="text-align: right;">
+                            <div>${rec.nutrients[nutrient].value} ${unit} per 100g</div>
+                            <div style="font-size: 0.75em; color: var(--text-secondary);">
+                                ~${Math.round(rec.nutrients[nutrient].gramsNeeded)}g needed
+                            </div>
+                        </div>
+                    </div>
+                    <div class="nutrient-bar">
+                        <div class="nutrient-bar-fill" 
+                             style="width: ${percentContrib}%; 
+                                    background-color: var(--success-color); 
+                                    opacity: 0.4;">
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        html += `
+            <div class='food-item'>
+                <div class="food-item-header" onclick="toggleResultFoodDetails(this)">
+                    <div class="food-item-info">
+                        <div class="food-title">
+                            <h3>${rec.foodName}</h3>
+                            <span style="background-color: var(--primary-color); color: white; border-radius: 1rem; padding: 0.125rem 0.5rem; font-size: 0.75rem; margin-left: 0.5rem;">
+                                Addresses ${rec.nutrientCount} nutrient${rec.nutrientCount > 1 ? 's' : ''}
+                            </span>
+                            <button onclick="addRecommendedFood('${rec.foodName.replace(/'/g, "\\'")}'); event.stopPropagation();" 
+                                    class="primary-button"
+                                    style="width: auto; padding: 0.375rem 0.75rem; margin-left: 0.5rem;">
+                                Add to Diet
+                            </button>
+                        </div>
+                    </div>
+                    <div class="expand-arrow">▼</div>
+                </div>
+                <div class="food-item-details" style="display: none; margin-top: 10px;">
+                    <div class="nutrient-contributions">
+                        ${nutrientsList}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    return html;
+}
+
 // Make updateDailyFraction available globally
 function updateDailyFraction(value) {
     dailyFraction = parseFloat(value);
@@ -729,8 +919,8 @@ function solve() {
                                 <div class="nutrient-bar">
                                     <div class="nutrient-bar-fill" 
                                          style="width: ${Math.min(100, percentage)}%; 
-                                                background-color: ${barColor}; 
-                                                opacity: ${opacity};">
+                                            background-color: ${barColor}; 
+                                            opacity: ${opacity};">
                                     </div>
                                 </div>
                             </div>
@@ -767,6 +957,67 @@ function solve() {
         // Then update stats and chart after the elements exist in the DOM
         updateStats(results);
         updateNutritionChart(results);
+        
+        // Calculate nutrient deficits and provide recommendations
+        const nutrientDeficits = {};
+        const nutrients = {};
+        
+        // Track how many nutrients are being checked
+        let totalNutrients = 0;
+        let nutrientsWithMin = 0;
+        let deficitsFound = 0;
+        
+        // Calculate total nutrients
+        for (const nutrient in constraints) {
+            if (nutrient === 'grams') continue;
+            
+            totalNutrients++;
+            nutrients[nutrient] = 0;
+            
+            for (const food in results) {
+                if (food !== 'feasible' && food !== 'result' && food !== 'bounded' && food !== 'isIntegral' && results[food] > 0) {
+                    nutrients[nutrient] += (data[food][nutrient] || 0) * results[food];
+                }
+            }
+            
+            // Check if this nutrient has a minimum requirement
+            if (constraints[nutrient].min) {
+                nutrientsWithMin++;
+                const minRequirement = constraints[nutrient].min * dailyFraction;
+                
+                // Check if we meet the minimum requirement with a 5% margin
+                if (nutrients[nutrient] < (minRequirement * 0.95)) {
+                    // We have a deficit, calculate how much is missing
+                    nutrientDeficits[nutrient] = minRequirement - nutrients[nutrient];
+                    deficitsFound++;
+                }
+            }
+        }
+        
+        console.log(`Nutrition analysis: ${totalNutrients} nutrients checked, ${nutrientsWithMin} with minimums, ${deficitsFound} deficits found`);
+        
+        // Always remove any existing recommendations first
+        const existingRecommendations = document.getElementById('food-recommendations');
+        if (existingRecommendations) {
+            existingRecommendations.remove();
+        }
+        
+        // If we have deficits, generate and display recommendations
+        if (Object.keys(nutrientDeficits).length > 0) {
+            console.log("Found nutrient deficits:", nutrientDeficits);
+            console.log("Total foods:", Object.keys(data).length, "Enabled foods:", enabledFoods.size);
+            
+            const recommendations = recommendFoodsForMissingNutrients(nutrientDeficits);
+            console.log("Generated recommendations:", recommendations.length);
+            
+            // Only display recommendations if we found some
+            if (recommendations.length > 0) {
+                const recommendationsHTML = displayRecommendations(recommendations, nutrientDeficits);
+                document.querySelector('.nutrition-details').insertAdjacentHTML('afterend', recommendationsHTML);
+            } else {
+                console.log("No viable recommendations found");
+            }
+        }
         
     } catch (error) {
         console.error("Error during optimization:", error);
@@ -989,4 +1240,52 @@ function toggleResultFoodDetails(header) {
         details.style.display = 'none';
         arrow.style.transform = 'rotate(0deg)';
     }
+}
+
+// Add a new function for adding recommended foods
+function addRecommendedFood(foodName) {
+    // Check if the food is already enabled
+    if (enabledFoods.has(foodName)) {
+        // Show a message that it's already in the diet
+        const messageDiv = document.createElement('div');
+        messageDiv.innerHTML = `<div style="background-color: var(--warning-color); color: white; padding: 0.5rem; border-radius: 0.25rem; margin-bottom: 0.5rem; text-align: center;">
+            ${foodName} is already in your diet
+        </div>`;
+        
+        // Insert at the top of the results
+        const resultDiv = document.getElementById('result');
+        resultDiv.insertBefore(messageDiv, resultDiv.firstChild);
+        
+        // Remove the message after 3 seconds
+        setTimeout(() => {
+            if (messageDiv.parentNode) {
+                messageDiv.parentNode.removeChild(messageDiv);
+            }
+        }, 3000);
+        
+        return;
+    }
+    
+    // Add the food to enabled foods
+    toggleFood(foodName);
+    
+    // Show a temporary message
+    const messageDiv = document.createElement('div');
+    messageDiv.innerHTML = `<div style="background-color: var(--success-color); color: white; padding: 0.5rem; border-radius: 0.25rem; margin-bottom: 0.5rem; text-align: center;">
+        Added ${foodName} to your diet and reoptimizing...
+    </div>`;
+    
+    // Insert at the top of the results
+    const resultDiv = document.getElementById('result');
+    resultDiv.insertBefore(messageDiv, resultDiv.firstChild);
+    
+    // Remove the message after 3 seconds
+    setTimeout(() => {
+        if (messageDiv.parentNode) {
+            messageDiv.parentNode.removeChild(messageDiv);
+        }
+    }, 3000);
+    
+    // Re-run the optimization
+    solve();
 }
