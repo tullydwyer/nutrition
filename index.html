@@ -191,7 +191,6 @@
             border: 1px solid var(--border-color);
             transition: all 0.2s;
             font-size: 0.875rem;
-            cursor: pointer;
         }
 
         .food-item-header {
@@ -646,6 +645,46 @@
 
         .nutrient-details.expanded .contributions-container {
             padding: 0.75rem;
+        }
+
+        /* Add these new styles */
+        #result .food-item {
+            cursor: pointer;
+            margin-bottom: 0.5rem;
+        }
+
+        #result .food-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        #result .food-item-info {
+            flex: 1;
+        }
+
+        #result .expand-arrow {
+            font-size: 0.8em;
+            color: var(--text-secondary);
+            transition: transform 0.3s ease;
+            margin-left: 1rem;
+        }
+
+        #result .food-item-details {
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        #result .nutrient-contributions {
+            padding-top: 0.75rem;
+            margin-top: 0.75rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        /* Hover effect */
+        #result .food-item:hover {
+            background-color: var(--background-color);
         }
     </style>
 </head>

@@ -682,10 +682,74 @@ function solve() {
             for (let foodName in results) {
                 if (foodName !== 'feasible' && foodName !== 'result' && foodName !== 'bounded' && 
                     foodName !== 'isIntegral' && results[foodName] > 0) {
+                    
+                    // Calculate nutrient contributions for this food
+                    let nutrientContributions = '';
+                    for (const nutrient in constraints) {
+                        if (nutrient === 'grams') continue;
+                        if (data[foodName][nutrient]) {
+                            const amount = data[foodName][nutrient] * results[foodName];
+                            // Extract unit from nutrient name
+                            const unitMatch = nutrient.match(/\((.*?)\)/);
+                            const unit = unitMatch ? unitMatch[1] : '';
+                            // Clean nutrient name
+                            const cleanNutrientName = nutrient.replace(/\s*\([^)]*\)/, '');
+
+                            // Calculate percentage of daily requirement
+                            let percentage = 0;
+                            let percentageText = '';
+                            if (constraints[nutrient].min) {
+                                percentage = (amount / (constraints[nutrient].min * dailyFraction)) * 100;
+                                percentageText = `${Math.round(percentage)}% of min`;
+                            } else if (constraints[nutrient].max) {
+                                percentage = (amount / (constraints[nutrient].max * dailyFraction)) * 100;
+                                percentageText = `${Math.round(percentage)}% of max`;
+                            }
+
+                            // Determine color based on percentage
+                            let barColor = 'var(--primary-color)';
+                            let opacity = '0.2';
+                            if (percentage > 100) {
+                                barColor = 'var(--warning-color)';
+                            } else if (percentage > 70) {
+                                opacity = '0.4';
+                            }
+
+                            nutrientContributions += `
+                                <div class="nutrient-item">
+                                    <div class="nutrient-item-header">
+                                        <span>${cleanNutrientName}</span>
+                                        <div style="text-align: right;">
+                                            <div>${Math.round(amount * 100) / 100} ${unit}</div>
+                                            <div style="font-size: 0.75em; color: var(--text-secondary);">${percentageText}</div>
+                                        </div>
+                                    </div>
+                                    <div class="nutrient-bar">
+                                        <div class="nutrient-bar-fill" 
+                                             style="width: ${Math.min(100, percentage)}%; 
+                                                    background-color: ${barColor}; 
+                                                    opacity: ${opacity};">
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }
+
                     resultHTML += `
                         <div class='food-item'>
-                            <h3>${foodName}</h3>
-                            <p style='color: var(--text-secondary);'>${Math.round(results[foodName] * 100) / 100}g</p>
+                            <div class="food-item-header" onclick="toggleResultFoodDetails(this)">
+                                <div class="food-item-info">
+                                    <h3>${foodName}</h3>
+                                    <p style='color: var(--text-secondary);'>${Math.round(results[foodName] * 100) / 100}g</p>
+                                </div>
+                                <div class="expand-arrow">▼</div>
+                            </div>
+                            <div class="food-item-details" style="display: none; margin-top: 10px;">
+                                <div class="nutrient-contributions">
+                                    ${nutrientContributions}
+                                </div>
+                            </div>
                         </div>
                     `;
                 }
@@ -915,3 +979,26 @@ document.addEventListener("DOMContentLoaded", function(event) {
     console.log("Page loaded, starting data load");
     fun();
 });
+
+// Add this function after the solve() function
+function toggleResultFoodDetails(header) {
+    const foodItem = header.closest('.food-item');
+    const details = foodItem.querySelector('.food-item-details');
+    const arrow = foodItem.querySelector('.expand-arrow');
+    
+    // Close all other open items
+    document.querySelectorAll('.food-item .food-item-details').forEach(item => {
+        if (item !== details && item.style.display === 'block') {
+            item.style.display = 'none';
+            item.closest('.food-item').querySelector('.expand-arrow').style.transform = 'rotate(0deg)';
+        }
+    });
+    
+    if (details.style.display === 'none') {
+        details.style.display = 'block';
+        arrow.style.transform = 'rotate(180deg)';
+    } else {
+        details.style.display = 'none';
+        arrow.style.transform = 'rotate(0deg)';
+    }
+}
