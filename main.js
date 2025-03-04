@@ -74,8 +74,17 @@ var data = {};
 var csvParser;
 var isDataLoaded = false;
 var enabledFoods = new Set(); // Store enabled food items
+var dailyFraction = 1; // Store the daily intake fraction
 
 let nutritionChart = null;
+
+// Make updateDailyFraction available globally
+function updateDailyFraction(value) {
+    dailyFraction = parseFloat(value);
+    if (isDataLoaded) {
+        solve();
+    }
+}
 
 // Add functions for localStorage management
 function saveEnabledFoods() {
@@ -272,18 +281,20 @@ function updateStats(results) {
         console.log(`${nutrient}: Amount = ${totalAmount}`);
         if (constraints[nutrient].min && constraints[nutrient].max) {
             // For nutrients with both min and max, must be within range
-            if (totalAmount >= constraints[nutrient].min - EPSILON && totalAmount <= constraints[nutrient].max + EPSILON) {
+            const scaledMin = constraints[nutrient].min * dailyFraction;
+            const scaledMax = constraints[nutrient].max * dailyFraction;
+            if (totalAmount >= scaledMin - EPSILON && totalAmount <= scaledMax + EPSILON) {
                 nutrientsMet++;
-                console.log(`  ✓ Met (within range ${constraints[nutrient].min} - ${constraints[nutrient].max})`);
+                console.log(`  ✓ Met (within range ${scaledMin} - ${scaledMax})`);
             } else {
-                console.log(`  ✗ Not met (outside range ${constraints[nutrient].min} - ${constraints[nutrient].max})`);
+                console.log(`  ✗ Not met (outside range ${scaledMin} - ${scaledMax})`);
             }
-        } else if (constraints[nutrient].min && totalAmount >= constraints[nutrient].min - EPSILON) {
+        } else if (constraints[nutrient].min && totalAmount >= constraints[nutrient].min * dailyFraction - EPSILON) {
             nutrientsMet++;
-            console.log(`  ✓ Met (>= min ${constraints[nutrient].min})`);
-        } else if (constraints[nutrient].max && totalAmount <= constraints[nutrient].max + EPSILON) {
+            console.log(`  ✓ Met (>= min ${constraints[nutrient].min * dailyFraction})`);
+        } else if (constraints[nutrient].max && totalAmount <= constraints[nutrient].max * dailyFraction + EPSILON) {
             nutrientsMet++;
-            console.log(`  ✓ Met (<= max ${constraints[nutrient].max})`);
+            console.log(`  ✓ Met (<= max ${constraints[nutrient].max * dailyFraction})`);
         } else {
             console.log(`  ✗ Not met`);
         }
@@ -356,34 +367,38 @@ function updateNutritionChart(results) {
         // Build the requirements text and determine status
         let requirementsText = '';
         if (constraints[nutrient].min && constraints[nutrient].max) {
-            requirementsText = `${constraints[nutrient].min} - ${constraints[nutrient].max} ${unit}`;
-            if (currentAmount >= constraints[nutrient].min - EPSILON && currentAmount <= constraints[nutrient].max + EPSILON) {
+            const scaledMin = Math.round(constraints[nutrient].min * dailyFraction * 100) / 100;
+            const scaledMax = Math.round(constraints[nutrient].max * dailyFraction * 100) / 100;
+            requirementsText = `${scaledMin} - ${scaledMax} ${unit} (${Math.round(dailyFraction * 100)}% of daily)`;
+            if (currentAmount >= scaledMin - EPSILON && currentAmount <= scaledMax + EPSILON) {
                 status = '✓ Within range';
                 statusClass = 'success';
                 percentage = 100;
-            } else if (currentAmount < constraints[nutrient].min - EPSILON) {
-                percentage = (currentAmount / constraints[nutrient].min) * 100;
-                status = `${Math.round(percentage)}% of min`;
+            } else if (currentAmount < scaledMin - EPSILON) {
+                percentage = (currentAmount / scaledMin) * 100;
+                status = `${Math.round(percentage)}% of target`;
                 statusClass = percentage > 70 ? 'warning' : 'error';
             } else {
-                percentage = (currentAmount / constraints[nutrient].max) * 100;
+                percentage = (currentAmount / scaledMax) * 100;
                 status = `${Math.round(percentage)}% of max`;
                 statusClass = 'error';
             }
         } else if (constraints[nutrient].min) {
-            requirementsText = `≥ ${constraints[nutrient].min} ${unit}`;
-            percentage = (currentAmount / constraints[nutrient].min) * 100;
-            if (currentAmount >= constraints[nutrient].min - EPSILON) {
+            const scaledMin = Math.round(constraints[nutrient].min * dailyFraction * 100) / 100;
+            requirementsText = `≥ ${scaledMin} ${unit} (${Math.round(dailyFraction * 100)}% of daily)`;
+            percentage = (currentAmount / scaledMin) * 100;
+            if (currentAmount >= scaledMin - EPSILON) {
                 status = '✓ Met';
                 statusClass = 'success';
             } else {
-                status = `${Math.round(percentage)}% of min`;
+                status = `${Math.round(percentage)}% of target`;
                 statusClass = percentage > 70 ? 'warning' : 'error';
             }
         } else if (constraints[nutrient].max) {
-            requirementsText = `≤ ${constraints[nutrient].max} ${unit}`;
-            percentage = (currentAmount / constraints[nutrient].max) * 100;
-            if (currentAmount <= constraints[nutrient].max + EPSILON) {
+            const scaledMax = Math.round(constraints[nutrient].max * dailyFraction * 100) / 100;
+            requirementsText = `≤ ${scaledMax} ${unit} (${Math.round(dailyFraction * 100)}% of daily)`;
+            percentage = (currentAmount / scaledMax) * 100;
+            if (currentAmount <= scaledMax + EPSILON) {
                 status = '✓ Within limit';
                 statusClass = 'success';
             } else {
@@ -511,10 +526,27 @@ function solve() {
             }
         }
 
+        // Apply daily fraction to constraints
+        const scaledConstraints = {};
+        for (const nutrient in constraints) {
+            scaledConstraints[nutrient] = {};
+            if (nutrient === 'grams') {
+                // Scale the maximum grams proportionally
+                scaledConstraints[nutrient].max = constraints[nutrient].max * dailyFraction;
+            } else {
+                if (constraints[nutrient].min !== undefined) {
+                    scaledConstraints[nutrient].min = constraints[nutrient].min * dailyFraction;
+                }
+                if (constraints[nutrient].max !== undefined) {
+                    scaledConstraints[nutrient].max = constraints[nutrient].max * dailyFraction;
+                }
+            }
+        }
+
         let model = {
             optimize: "grams",
             opType: "min",
-            constraints: constraints,
+            constraints: scaledConstraints,
             variables: enabledFoodData,
             options: {
                 tolerance: 0.2
@@ -528,13 +560,13 @@ function solve() {
             console.log("No solution with original constraints, trying relaxed constraints");
             
             const relaxedConstraints = {};
-            for (const nutrient in constraints) {
+            for (const nutrient in scaledConstraints) {
                 relaxedConstraints[nutrient] = {};
-                if (constraints[nutrient].min !== undefined) {
-                    relaxedConstraints[nutrient].min = constraints[nutrient].min * 0.7;
+                if (scaledConstraints[nutrient].min !== undefined) {
+                    relaxedConstraints[nutrient].min = scaledConstraints[nutrient].min * 0.7;
                 }
-                if (constraints[nutrient].max !== undefined) {
-                    relaxedConstraints[nutrient].max = constraints[nutrient].max * 1.3;
+                if (scaledConstraints[nutrient].max !== undefined) {
+                    relaxedConstraints[nutrient].max = scaledConstraints[nutrient].max * 1.3;
                 }
             }
             
@@ -568,7 +600,7 @@ function solve() {
             </div>`;
 
             resultHTML += `<div style='font-size: 1.25rem; margin-bottom: 1rem;'>
-                Total weight: <strong>${Math.round(results.result)}g</strong>
+                Total weight: <strong>${Math.round(results.result)}g</strong> (${Math.round(dailyFraction * 100)}% of daily intake)
             </div>`;
             
             resultHTML += "<div class='food-list'>";
