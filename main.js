@@ -1,4 +1,11 @@
 const constraints = {
+    "Protein (g)": {
+        min: 64
+    },
+    "Total long chain omega 3 fatty acids, equated (mg)":{
+        min: 160,
+        max: 3000
+    },
     "Vitamin C (mg)": {
         min: 45
     },
@@ -55,7 +62,7 @@ const constraints = {
         max: 10
     },
     "Total dietary fibre (g)": {
-        min: 20
+        min: 30
     },
     "Sodium (Na) (mg)": {
         min: 400,
