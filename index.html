@@ -686,6 +686,35 @@
         #result .food-item:hover {
             background-color: var(--background-color);
         }
+
+        /* Add these new styles */
+        #result .food-title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        #result .food-title h3 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 500;
+        }
+
+        #result .recipe-amount {
+            background-color: var(--background-color);
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.875rem;
+            color: var(--primary-color);
+            font-weight: 500;
+            border: 1px solid var(--border-color);
+        }
+
+        #result .food-item:hover .recipe-amount {
+            border-color: var(--primary-color);
+            background-color: var(--primary-color);
+            color: white;
+        }
     </style>
 </head>
 

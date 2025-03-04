@@ -740,8 +740,10 @@ function solve() {
                         <div class='food-item'>
                             <div class="food-item-header" onclick="toggleResultFoodDetails(this)">
                                 <div class="food-item-info">
-                                    <h3>${foodName}</h3>
-                                    <p style='color: var(--text-secondary);'>${Math.round(results[foodName] * 100) / 100}g</p>
+                                    <div class="food-title">
+                                        <h3>${foodName}</h3>
+                                        <div class="recipe-amount">${Math.round(results[foodName] * 100) / 100}g</div>
+                                    </div>
                                 </div>
                                 <div class="expand-arrow">▼</div>
                             </div>
