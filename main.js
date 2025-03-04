@@ -75,6 +75,7 @@ var csvParser;
 var isDataLoaded = false;
 var enabledFoods = new Set(); // Store enabled food items
 var foodMaxGrams = {}; // Store max grams for each food
+var foodMinGrams = {}; // Store min grams for each food
 var dailyFraction = 1; // Store the daily intake fraction
 
 let nutritionChart = null;
@@ -91,16 +92,21 @@ function updateDailyFraction(value) {
 function saveEnabledFoods() {
     localStorage.setItem('enabledFoods', JSON.stringify(Array.from(enabledFoods)));
     localStorage.setItem('foodMaxGrams', JSON.stringify(foodMaxGrams));
+    localStorage.setItem('foodMinGrams', JSON.stringify(foodMinGrams));
 }
 
 function loadEnabledFoods() {
     const saved = localStorage.getItem('enabledFoods');
     const savedMaxGrams = localStorage.getItem('foodMaxGrams');
+    const savedMinGrams = localStorage.getItem('foodMinGrams');
     if (saved) {
         enabledFoods = new Set(JSON.parse(saved));
     }
     if (savedMaxGrams) {
         foodMaxGrams = JSON.parse(savedMaxGrams);
+    }
+    if (savedMinGrams) {
+        foodMinGrams = JSON.parse(savedMinGrams);
     }
 }
 
@@ -127,6 +133,10 @@ function updateMaxGrams(foodName, value) {
     const maxGrams = parseInt(value) || 0;
     if (maxGrams > 0) {
         foodMaxGrams[foodName] = maxGrams;
+        // Ensure min doesn't exceed max
+        if (foodMinGrams[foodName] && foodMinGrams[foodName] > maxGrams) {
+            foodMinGrams[foodName] = maxGrams;
+        }
     } else {
         delete foodMaxGrams[foodName];
     }
@@ -137,6 +147,29 @@ function updateMaxGrams(foodName, value) {
     // Re-run optimization if data is loaded
     if (isDataLoaded) {
         solve();
+        displayFoodList(); // Update display to reflect min/max relationship
+    }
+}
+
+function updateMinGrams(foodName, value) {
+    const minGrams = parseInt(value) || 0;
+    if (minGrams > 0) {
+        foodMinGrams[foodName] = minGrams;
+        // Ensure max isn't below min
+        if (foodMaxGrams[foodName] && foodMaxGrams[foodName] < minGrams) {
+            foodMaxGrams[foodName] = minGrams;
+        }
+    } else {
+        delete foodMinGrams[foodName];
+    }
+    
+    // Save to localStorage
+    saveEnabledFoods();
+    
+    // Re-run optimization if data is loaded
+    if (isDataLoaded) {
+        solve();
+        displayFoodList(); // Update display to reflect min/max relationship
     }
 }
 
@@ -546,9 +579,9 @@ function solve() {
         for (const foodName in data) {
             if (enabledFoods.has(foodName)) {
                 enabledFoodData[foodName] = {...data[foodName]};
-                // Add individual max constraint if set
-                if (foodMaxGrams[foodName]) {
-                    enabledFoodData[foodName][`max_${foodName}`] = 1;
+                // Add individual min/max constraints if set
+                if (foodMaxGrams[foodName] || foodMinGrams[foodName]) {
+                    enabledFoodData[foodName][`limit_${foodName}`] = 1;
                 }
             }
         }
@@ -570,10 +603,17 @@ function solve() {
             }
         }
 
-        // Add individual food max constraints
-        for (const foodName in foodMaxGrams) {
-            if (enabledFoodData[foodName]) {
-                scaledConstraints[`max_${foodName}`] = { max: foodMaxGrams[foodName] };
+        // Add individual food min/max constraints
+        for (const foodName in enabledFoodData) {
+            if (foodMaxGrams[foodName] || foodMinGrams[foodName]) {
+                const constraint = {};
+                if (foodMinGrams[foodName]) {
+                    constraint.min = foodMinGrams[foodName];
+                }
+                if (foodMaxGrams[foodName]) {
+                    constraint.max = foodMaxGrams[foodName];
+                }
+                scaledConstraints[`limit_${foodName}`] = constraint;
             }
         }
 
@@ -811,6 +851,7 @@ function displayFoodList() {
     for (let foodName of sortedFoods) {
         const isEnabled = enabledFoods.has(foodName);
         const maxGrams = foodMaxGrams[foodName] || '';
+        const minGrams = foodMinGrams[foodName] || '';
         html += `
             <div class='food-item ${!isEnabled ? 'disabled' : ''}' data-food-name="${foodName}" onclick="toggleFoodDetails('${foodName.replace(/'/g, "\\'")}')">
                 <div class="food-item-header">
@@ -821,14 +862,24 @@ function displayFoodList() {
                         </p>
                     </div>
                     <div class="food-item-controls" onclick="event.stopPropagation()">
-                        <input 
-                            type="number" 
-                            min="0" 
-                            placeholder="Max g"
-                            class="max-grams-input"
-                            value="${maxGrams}"
-                            onchange="updateMaxGrams('${foodName.replace(/'/g, "\\'")}', this.value)"
-                        >
+                        <div class="grams-inputs">
+                            <input 
+                                type="number" 
+                                min="0" 
+                                placeholder="Min g"
+                                class="min-grams-input"
+                                value="${minGrams}"
+                                onchange="updateMinGrams('${foodName.replace(/'/g, "\\'")}', this.value)"
+                            >
+                            <input 
+                                type="number" 
+                                min="0" 
+                                placeholder="Max g"
+                                class="max-grams-input"
+                                value="${maxGrams}"
+                                onchange="updateMaxGrams('${foodName.replace(/'/g, "\\'")}', this.value)"
+                            >
+                        </div>
                         <label class="toggle-switch">
                             <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleFood('${foodName.replace(/'/g, "\\'")}')">
                             <span class="toggle-slider"></span>

@@ -267,8 +267,14 @@
             gap: 0.5rem;
         }
 
+        .grams-inputs {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .min-grams-input,
         .max-grams-input {
-            width: 70px;
+            width: 60px;
             padding: 0.25rem 0.5rem;
             border: 1px solid var(--border-color);
             border-radius: 0.375rem;
@@ -278,16 +284,29 @@
             transition: border-color 0.2s;
         }
 
+        .min-grams-input:focus,
         .max-grams-input:focus {
             outline: none;
             border-color: var(--primary-color);
             box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
         }
 
+        .min-grams-input::-webkit-inner-spin-button,
+        .min-grams-input::-webkit-outer-spin-button,
         .max-grams-input::-webkit-inner-spin-button,
         .max-grams-input::-webkit-outer-spin-button {
             opacity: 1;
             height: 20px;
+        }
+
+        .min-grams-input::placeholder,
+        .max-grams-input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
+
+        .min-grams-input {
+            border-right-color: var(--border-color);
         }
 
         /* Add a scrollbar styling for the food list */
