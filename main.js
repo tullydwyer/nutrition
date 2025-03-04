@@ -74,6 +74,7 @@ var data = {};
 var csvParser;
 var isDataLoaded = false;
 var enabledFoods = new Set(); // Store enabled food items
+var foodMaxGrams = {}; // Store max grams for each food
 var dailyFraction = 1; // Store the daily intake fraction
 
 let nutritionChart = null;
@@ -89,12 +90,17 @@ function updateDailyFraction(value) {
 // Add functions for localStorage management
 function saveEnabledFoods() {
     localStorage.setItem('enabledFoods', JSON.stringify(Array.from(enabledFoods)));
+    localStorage.setItem('foodMaxGrams', JSON.stringify(foodMaxGrams));
 }
 
 function loadEnabledFoods() {
     const saved = localStorage.getItem('enabledFoods');
+    const savedMaxGrams = localStorage.getItem('foodMaxGrams');
     if (saved) {
         enabledFoods = new Set(JSON.parse(saved));
+    }
+    if (savedMaxGrams) {
+        foodMaxGrams = JSON.parse(savedMaxGrams);
     }
 }
 
@@ -115,6 +121,23 @@ function toggleFood(foodName) {
 
     // Update the display to reflect the new order
     displayFoodList();
+}
+
+function updateMaxGrams(foodName, value) {
+    const maxGrams = parseInt(value) || 0;
+    if (maxGrams > 0) {
+        foodMaxGrams[foodName] = maxGrams;
+    } else {
+        delete foodMaxGrams[foodName];
+    }
+    
+    // Save to localStorage
+    saveEnabledFoods();
+    
+    // Re-run optimization if data is loaded
+    if (isDataLoaded) {
+        solve();
+    }
 }
 
 class ExcelToJSON {
@@ -522,7 +545,11 @@ function solve() {
         const enabledFoodData = {};
         for (const foodName in data) {
             if (enabledFoods.has(foodName)) {
-                enabledFoodData[foodName] = data[foodName];
+                enabledFoodData[foodName] = {...data[foodName]};
+                // Add individual max constraint if set
+                if (foodMaxGrams[foodName]) {
+                    enabledFoodData[foodName][`max_${foodName}`] = 1;
+                }
             }
         }
 
@@ -540,6 +567,13 @@ function solve() {
                 if (constraints[nutrient].max !== undefined) {
                     scaledConstraints[nutrient].max = constraints[nutrient].max * dailyFraction;
                 }
+            }
+        }
+
+        // Add individual food max constraints
+        for (const foodName in foodMaxGrams) {
+            if (enabledFoodData[foodName]) {
+                scaledConstraints[`max_${foodName}`] = { max: foodMaxGrams[foodName] };
             }
         }
 
@@ -776,6 +810,7 @@ function displayFoodList() {
     
     for (let foodName of sortedFoods) {
         const isEnabled = enabledFoods.has(foodName);
+        const maxGrams = foodMaxGrams[foodName] || '';
         html += `
             <div class='food-item ${!isEnabled ? 'disabled' : ''}' data-food-name="${foodName}" onclick="toggleFoodDetails('${foodName.replace(/'/g, "\\'")}')">
                 <div class="food-item-header">
@@ -785,10 +820,20 @@ function displayFoodList() {
                             ${data[foodName]["Public Food Key"] || 'No ID'}
                         </p>
                     </div>
-                    <label class="toggle-switch" onclick="event.stopPropagation()">
-                        <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleFood('${foodName.replace(/'/g, "\\'")}')">
-                        <span class="toggle-slider"></span>
-                    </label>
+                    <div class="food-item-controls" onclick="event.stopPropagation()">
+                        <input 
+                            type="number" 
+                            min="0" 
+                            placeholder="Max g"
+                            class="max-grams-input"
+                            value="${maxGrams}"
+                            onchange="updateMaxGrams('${foodName.replace(/'/g, "\\'")}', this.value)"
+                        >
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleFood('${foodName.replace(/'/g, "\\'")}')">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
                 </div>
                 <div class="food-item-details">
                     <!-- Nutritional details will be populated when expanded -->
