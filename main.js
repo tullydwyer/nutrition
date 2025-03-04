@@ -603,7 +603,7 @@ function solve() {
             }
         }
 
-        // Add individual food min/max constraints
+        // Add individual food min/max constraints if explicitly set by user
         for (const foodName in enabledFoodData) {
             if (foodMaxGrams[foodName] || foodMinGrams[foodName]) {
                 const constraint = {};
@@ -650,137 +650,123 @@ function solve() {
             results = solver.Solve(model);
             
             if (results.feasible) {
-                resultHTML += "<div class='warning'>Solution found with relaxed constraints. Some nutritional requirements were adjusted to find a feasible solution.</div>";
+                resultHTML += "<div class='warning' style='background-color: var(--warning-color); color: white; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;'>⚠️ Warning: This is a best-effort solution. Some nutritional requirements could not be fully met with the available foods.</div>";
+            } else {
+                resultHTML += "<div class='warning' style='background-color: var(--error-color); color: white; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;'>⚠️ Warning: Could not find a solution that meets the nutritional requirements. Showing best effort with available foods.</div>";
             }
         } else {
             resultHTML += "<div style='color: var(--success-color); margin-bottom: 1rem;'>✓ Optimal solution found!</div>";
         }
         
-        if (results.feasible) {
-            // Move the stats grid here
-            resultHTML += `<div class='stats-grid'>
-                <div class='stat-card'>
-                    <h3>Foods</h3>
-                    <div class='value' id='total-foods'>-</div>
-                </div>
-                <div class='stat-card'>
-                    <h3>Weight</h3>
-                    <div class='value' id='total-weight'>-</div>
-                </div>
-                <div class='stat-card'>
-                    <h3>Nutrients</h3>
-                    <div class='value' id='nutrients-met'>-</div>
-                </div>
-            </div>`;
+        // Always show results, even if not strictly feasible
+        // Move the stats grid here
+        resultHTML += `<div class='stats-grid'>
+            <div class='stat-card'>
+                <h3>Foods</h3>
+                <div class='value' id='total-foods'>-</div>
+            </div>
+            <div class='stat-card'>
+                <h3>Weight</h3>
+                <div class='value' id='total-weight'>-</div>
+            </div>
+            <div class='stat-card'>
+                <h3>Nutrients</h3>
+                <div class='value' id='nutrients-met'>-</div>
+            </div>
+        </div>`;
 
-            resultHTML += `<div style='font-size: 1.25rem; margin-bottom: 1rem;'>
-                Total weight: <strong>${Math.round(results.result)}g</strong> (${Math.round(dailyFraction * 100)}% of daily intake)
-            </div>`;
-            
-            resultHTML += "<div class='food-list'>";
-            
-            for (let foodName in results) {
-                if (foodName !== 'feasible' && foodName !== 'result' && foodName !== 'bounded' && 
-                    foodName !== 'isIntegral' && results[foodName] > 0) {
-                    
-                    // Calculate nutrient contributions for this food
-                    let nutrientContributions = '';
-                    for (const nutrient in constraints) {
-                        if (nutrient === 'grams') continue;
-                        if (data[foodName][nutrient]) {
-                            const amount = data[foodName][nutrient] * results[foodName];
-                            // Extract unit from nutrient name
-                            const unitMatch = nutrient.match(/\((.*?)\)/);
-                            const unit = unitMatch ? unitMatch[1] : '';
-                            // Clean nutrient name
-                            const cleanNutrientName = nutrient.replace(/\s*\([^)]*\)/, '');
+        resultHTML += `<div style='font-size: 1.25rem; margin-bottom: 1rem;'>
+            Total weight: <strong>${Math.round(results.result)}g</strong> (${Math.round(dailyFraction * 100)}% of daily intake)
+        </div>`;
+        
+        resultHTML += "<div class='food-list'>";
+        
+        for (let foodName in results) {
+            if (foodName !== 'feasible' && foodName !== 'result' && foodName !== 'bounded' && 
+                foodName !== 'isIntegral' && results[foodName] > 0) {
+                
+                // Calculate nutrient contributions for this food
+                let nutrientContributions = '';
+                for (const nutrient in constraints) {
+                    if (nutrient === 'grams') continue;
+                    if (data[foodName][nutrient]) {
+                        const amount = data[foodName][nutrient] * results[foodName];
+                        // Extract unit from nutrient name
+                        const unitMatch = nutrient.match(/\((.*?)\)/);
+                        const unit = unitMatch ? unitMatch[1] : '';
+                        // Clean nutrient name
+                        const cleanNutrientName = nutrient.replace(/\s*\([^)]*\)/, '');
 
-                            // Calculate percentage of daily requirement
-                            let percentage = 0;
-                            let percentageText = '';
-                            if (constraints[nutrient].min) {
-                                percentage = (amount / (constraints[nutrient].min * dailyFraction)) * 100;
-                                percentageText = `${Math.round(percentage)}% of min`;
-                            } else if (constraints[nutrient].max) {
-                                percentage = (amount / (constraints[nutrient].max * dailyFraction)) * 100;
-                                percentageText = `${Math.round(percentage)}% of max`;
-                            }
-
-                            // Determine color based on percentage
-                            let barColor = 'var(--primary-color)';
-                            let opacity = '0.2';
-                            if (percentage > 100) {
-                                barColor = 'var(--warning-color)';
-                            } else if (percentage > 70) {
-                                opacity = '0.4';
-                            }
-
-                            nutrientContributions += `
-                                <div class="nutrient-item">
-                                    <div class="nutrient-item-header">
-                                        <span>${cleanNutrientName}</span>
-                                        <div style="text-align: right;">
-                                            <div>${Math.round(amount * 100) / 100} ${unit}</div>
-                                            <div style="font-size: 0.75em; color: var(--text-secondary);">${percentageText}</div>
-                                        </div>
-                                    </div>
-                                    <div class="nutrient-bar">
-                                        <div class="nutrient-bar-fill" 
-                                             style="width: ${Math.min(100, percentage)}%; 
-                                                    background-color: ${barColor}; 
-                                                    opacity: ${opacity};">
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
+                        // Calculate percentage of daily requirement
+                        let percentage = 0;
+                        let percentageText = '';
+                        if (constraints[nutrient].min) {
+                            percentage = (amount / (constraints[nutrient].min * dailyFraction)) * 100;
+                            percentageText = `${Math.round(percentage)}% of min`;
+                        } else if (constraints[nutrient].max) {
+                            percentage = (amount / (constraints[nutrient].max * dailyFraction)) * 100;
+                            percentageText = `${Math.round(percentage)}% of max`;
                         }
-                    }
 
-                    resultHTML += `
-                        <div class='food-item'>
-                            <div class="food-item-header" onclick="toggleResultFoodDetails(this)">
-                                <div class="food-item-info">
-                                    <div class="food-title">
-                                        <h3>${foodName}</h3>
-                                        <div class="recipe-amount">${Math.round(results[foodName] * 100) / 100}g</div>
+                        // Determine color based on percentage
+                        let barColor = 'var(--primary-color)';
+                        let opacity = '0.2';
+                        if (percentage > 100) {
+                            barColor = 'var(--warning-color)';
+                        } else if (percentage > 70) {
+                            opacity = '0.4';
+                        }
+
+                        nutrientContributions += `
+                            <div class="nutrient-item">
+                                <div class="nutrient-item-header">
+                                    <span>${cleanNutrientName}</span>
+                                    <div style="text-align: right;">
+                                        <div>${Math.round(amount * 100) / 100} ${unit}</div>
+                                        <div style="font-size: 0.75em; color: var(--text-secondary);">${percentageText}</div>
                                     </div>
                                 </div>
-                                <div class="expand-arrow">▼</div>
-                            </div>
-                            <div class="food-item-details" style="display: none; margin-top: 10px;">
-                                <div class="nutrient-contributions">
-                                    ${nutrientContributions}
+                                <div class="nutrient-bar">
+                                    <div class="nutrient-bar-fill" 
+                                         style="width: ${Math.min(100, percentage)}%; 
+                                                background-color: ${barColor}; 
+                                                opacity: ${opacity};">
+                                    </div>
                                 </div>
+                            </div>
+                        `;
+                    }
+                }
+
+                resultHTML += `
+                    <div class='food-item'>
+                        <div class="food-item-header" onclick="toggleResultFoodDetails(this)">
+                            <div class="food-item-info">
+                                <div class="food-title">
+                                    <h3>${foodName}</h3>
+                                    <div class="recipe-amount">${Math.round(results[foodName] * 100) / 100}g</div>
+                                </div>
+                            </div>
+                            <div class="expand-arrow">▼</div>
+                        </div>
+                        <div class="food-item-details" style="display: none; margin-top: 10px;">
+                            <div class="nutrient-contributions">
+                                ${nutrientContributions}
                             </div>
                         </div>
-                    `;
-                }
+                    </div>
+                `;
             }
-            
-            resultHTML += "</div>";
-            
-            // First set the HTML content
-            document.getElementById('result').innerHTML = resultHTML;
-            
-            // Then update stats and chart after the elements exist in the DOM
-            updateStats(results);
-            updateNutritionChart(results);
-            
-        } else {
-            resultHTML += `
-                <div style='color: var(--error-color); margin-bottom: 1rem;'>
-                    No feasible solution found
-                </div>
-                <p>The nutritional requirements could not be met with the available foods.</p>
-                <ul style='color: var(--text-secondary);'>
-                    <li>Check if the CSV data is properly formatted</li>
-                    <li>Verify that the food data includes nutritional information for the constraints</li>
-                    <li>Try with a different set of food items</li>
-                </ul>
-            `;
-            
-            document.getElementById('result').innerHTML = resultHTML;
         }
+        
+        resultHTML += "</div>";
+        
+        // First set the HTML content
+        document.getElementById('result').innerHTML = resultHTML;
+        
+        // Then update stats and chart after the elements exist in the DOM
+        updateStats(results);
+        updateNutritionChart(results);
         
     } catch (error) {
         console.error("Error during optimization:", error);
